@@ -1,9 +1,10 @@
-import type { NextConfig } from 'next';
+/** @type {import('next').NextConfig} */
 
-const nextConfig: NextConfig = {
+const nextConfig = {
   reactStrictMode: true,
-  // This allows Vercel to cache MongoDB connections effectively in serverless environments
-  serverExternalPackages: ['mongoose']
+
+  // Allows Vercel to handle Mongoose as an external server package
+  serverExternalPackages: ['mongoose'],
 };
 
 export default nextConfig;
