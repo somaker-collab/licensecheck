@@ -11,7 +11,7 @@ export async function setupMonitor(recordId: string) {
   if (!record) throw new Error('Record not found');
 
   const webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/tinyfish`;
-  const tfMonitor = await createTinyFishMonitor(record.source_url, webhookUrl, 'daily');
+  const tfMonitor = await TinyFishClient.createMonitor(record.source_url, webhookUrl, 'daily');
 
   return await Monitor.create({
     record_id: record._id,
