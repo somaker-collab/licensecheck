@@ -2,7 +2,7 @@ import Monitor from '@/models/Monitor';
 import Record from '@/models/Record';
 import WebhookEvent from '@/models/WebhookEvent';
 import VerificationHistory from '@/models/VerificationHistory';
-import { createTinyFishMonitor } from '../tinyfish/monitor';
+import { TinyFishClient } from '../tinyfish/client';
 import { detectMeaningfulChange } from './change-detection';
 import { createAlert } from './alert-service';
 
