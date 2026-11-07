@@ -1,32 +1,75 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { processWebhook } from '@/lib/services/monitoring-service';
+import Monitor from '@/models/Monitor';
 import crypto from 'crypto';
 
 export async function POST(req: Request) {
   try {
-    // 1. Validate signature
-    const signature = req.headers.get('x-tinyfish-signature');
-    const body = await req.text();
-    
-    const expectedSig = crypto
-      .createHmac('sha256', process.env.TINYFISH_WEBHOOK_SECRET!)
-      .update(body)
-      .digest('hex');
+    const url = new URL(req.url);
+    const token = url.searchParams.get('token');
 
-    if (signature !== expectedSig) {
-      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+    if (!token || !/^[a-f0-9]{64}$/i.test(token)) {
+      return NextResponse.json(
+        { error: 'Invalid webhook token.' },
+        { status: 401 }
+      );
+    }
+
+    const payload = await req.json();
+
+    const monitorId = payload.fetch_monitor_id;
+    const eventId = payload.id;
+
+    if (
+      typeof monitorId !== 'string' ||
+      typeof eventId !== 'string' ||
+      !eventId
+    ) {
+      return NextResponse.json(
+        { error: 'Missing monitor ID or run ID.' },
+        { status: 400 }
+      );
     }
 
     await connectToDatabase();
-    const payload = JSON.parse(body);
-    const eventId = req.headers.get('x-tinyfish-event-id') || crypto.randomUUID();
 
-    // 2. Process idempotently
+    const monitor = await Monitor.findOne({
+      tinyfish_monitor_id: monitorId,
+      monitoring_status: 'active',
+    }).select('+webhook_token_hash');
+
+    if (!monitor?.webhook_token_hash) {
+      return NextResponse.json(
+        { error: 'Monitor not found.' },
+        { status: 401 }
+      );
+    }
+
+    const receivedHash = crypto
+      .createHash('sha256')
+      .update(token)
+      .digest();
+
+    const storedHash = Buffer.from(monitor.webhook_token_hash, 'hex');
+
+    if (
+      storedHash.length !== receivedHash.length ||
+      !crypto.timingSafeEqual(storedHash, receivedHash)
+    ) {
+      return NextResponse.json(
+        { error: 'Invalid webhook token.' },
+        { status: 401 }
+      );
+    }
+
     await processWebhook(payload, eventId);
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error ? error.message : 'Webhook processing failed.';
+
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
