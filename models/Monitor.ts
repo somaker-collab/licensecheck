@@ -7,6 +7,8 @@ export interface IMonitor extends Document {
   schedule: string;
   monitoring_status: 'active' | 'paused' | 'stopped';
   last_checked_at?: Date;
+  last_content_hash?: string;
+  webhook_token_hash: string;
 }
 
 const MonitorSchema = new Schema<IMonitor>({
@@ -16,6 +18,8 @@ const MonitorSchema = new Schema<IMonitor>({
   schedule: { type: String, default: 'daily' },
   monitoring_status: { type: String, default: 'active' },
   last_checked_at: Date,
+  last_content_hash: String,
+  webhook_token_hash: { type: String, required: true, select: false },
 }, { timestamps: true });
 
 export default models.Monitor || mongoose.model<IMonitor>('Monitor', MonitorSchema);
