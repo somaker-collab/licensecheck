@@ -109,6 +109,36 @@ Important rules:
         restrictions: [],
       });
     }
+
+    const lines = text.split(/\r?\n/).map((line) => line.trim());
+    for (let i = 0; i < lines.length; i += 1) {
+      const firstField = lines[i].match(/^\|\s*Full Name\s*\|\s*(.*?)\s*\|$/i);
+      if (!firstField) continue;
+
+      const fields: Record<string, string> = { 'Full Name': firstField[1].trim() };
+      for (let j = i + 1; j < Math.min(lines.length, i + 16); j += 1) {
+        const field = lines[j].match(/^\|\s*([^|]+?)\s*\|\s*(.*?)\s*\|$/);
+        if (!field) continue;
+        const key = field[1].trim();
+        if (key === 'Full Name') break;
+        if (!['---', ''].includes(key)) fields[key] = field[2].trim();
+      }
+
+      if (!fields['NMC No']) continue;
+      results.push({
+        name: fields['Full Name'],
+        registration_number: fields['NMC No'],
+        status: 'unknown',
+        original_status: [
+          fields.Address && `Address ${fields.Address}`,
+          fields.Degree && `Degree ${fields.Degree}`,
+        ].filter(Boolean).join('; ') || 'Status not published by the official NMC search response',
+        source_url: sourceUrl,
+        disciplinary_actions: ['unavailable'],
+        restrictions: [],
+      });
+    }
+
     return results;
   }
 }
