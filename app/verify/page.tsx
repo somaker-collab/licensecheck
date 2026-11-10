@@ -14,7 +14,7 @@ export default function VerifyPage() {
     if (attempt > 60) throw new Error('Verification is taking too long. Refresh this page and try again.');
     const response = await fetch(`/api/verify/status/${jobId}`, { cache: 'no-store' });
     const data = await response.json();
-    if (data.outcome === 'pending') { timer.current = setTimeout(() => { void poll(jobId, attempt + 1); }, 3000); return; }
+    if (data.outcome === 'pending') { timer.current = setTimeout(() => { void poll(jobId, attempt + 1); }, 1500); return; }
     if (!response.ok || !data.success) throw new Error(data.error || 'Verification failed.');
     setResult(data); setLoading(false);
   }

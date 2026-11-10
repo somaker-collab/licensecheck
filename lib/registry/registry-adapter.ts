@@ -17,13 +17,19 @@ export abstract class RegistryAdapter {
   }
 
   async corroborate(matches: TinyFishMatch[], _req?: VerificationRequest): Promise<RegistryMatch[]> {
-    const verified: RegistryMatch[] = [];
-    for (const match of matches || []) {
-      if (!match.source_url) continue;
-      const fetched = await TinyFishClient.fetch(match.source_url, `Confirm that this official registry page contains the record for ${match.name}. Do not infer or invent information.`);
-      if (fetched.results?.[0]?.text?.trim()) verified.push(toRegistryMatch(match));
-    }
-    return verified;
+    const candidates = (matches || []).filter((match) => Boolean(match.source_url));
+    const verified = await Promise.all(candidates.map(async (match) => {
+      try {
+        const fetched = await TinyFishClient.fetch(
+          match.source_url,
+          `Confirm that this official registry page contains the record for ${match.name}. Do not infer or invent information.`,
+        );
+        return fetched.results?.[0]?.text?.trim() ? toRegistryMatch(match) : null;
+      } catch {
+        return null;
+      }
+    }));
+    return verified.filter((match): match is RegistryMatch => match !== null);
   }
 
   async verify(req: VerificationRequest): Promise<VerificationResult> {
