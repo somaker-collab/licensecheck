@@ -91,7 +91,11 @@ export async function GET(
     }
 
     const adapter = getRegistryAdapter(job.jurisdiction, job.record_type);
-    const matches = await adapter.corroborate(run.result?.matches || []);
+    const matches = await adapter.corroborate(run.result?.matches || [], {
+      name: job.name,
+      jurisdiction: job.jurisdiction,
+      record_type: job.record_type,
+    });
 
     if (matches.length === 0) {
       const result = {

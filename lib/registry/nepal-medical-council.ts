@@ -1,5 +1,5 @@
-import { RegistryAdapter, VerificationRequest } from './registry-adapter';
-import { TinyFishClient } from '../tinyfish/client';
+import { RegistryAdapter, RegistryMatch, VerificationRequest } from './registry-adapter';
+import { TinyFishClient, TinyFishMatch } from '../tinyfish/client';
 
 export class NepalMedicalCouncilAdapter extends RegistryAdapter {
   registryName = 'Nepal Medical Council';
@@ -60,5 +60,55 @@ Important rules:
 - Return exactly one candidate only when the registration number proves that the record is unique.
 - The requested name is "${req.name}".
 - Registration number supplied: ${hasRegistrationNumber ? 'yes' : 'no'}.`;
+  }
+
+  async corroborate(matches: TinyFishMatch[], req?: VerificationRequest): Promise<RegistryMatch[]> {
+    if (req) {
+      const searchUrl = new URL(this.startUrl);
+      if (req.name.trim()) searchUrl.searchParams.set('name', req.name.trim());
+      if (req.registration_number?.trim()) {
+        searchUrl.searchParams.set('nmc_no', req.registration_number.trim());
+      }
+
+      try {
+        const fetched = await TinyFishClient.fetch(
+          searchUrl.toString(),
+          `Extract every practitioner row returned by the official Nepal Medical Council search for ${req.name}${req.registration_number ? ` and NMC number ${req.registration_number}` : ''}. Preserve the published name, NMC number, address, gender, and degree. Do not infer status or any unpublished field.`,
+        );
+        const text = fetched.results?.[0]?.text || '';
+        const parsed = this.parseOfficialRows(text, searchUrl.toString());
+        if (parsed.length > 0 || text.includes('Please enter Doctor Name or NMC number')) {
+          return parsed.filter((match) => !req.registration_number || match.registration_number === req.registration_number.trim());
+        }
+      } catch {
+        // If Fetch is temporarily unavailable, preserve the normal Agent corroboration path.
+      }
+    }
+
+    return super.corroborate(matches, req);
+  }
+
+  private parseOfficialRows(text: string, sourceUrl: string): RegistryMatch[] {
+    const results: RegistryMatch[] = [];
+    const rowPattern = /Full Name\s+(.+?)\s+NMC No\s+([A-Za-z0-9-]+)(.*?)(?=Full Name\s|Nepal Medical Council|$)/g;
+    let match: RegExpExecArray | null;
+    while ((match = rowPattern.exec(text)) !== null) {
+      const name = match[1].trim();
+      const registrationNumber = match[2].trim();
+      const details = match[3].trim();
+      const address = details.match(/Address\s+(.+?)(?=,?\s*Gender\s|,?\s*Degree\s|$)/i)?.[1]?.trim();
+      const degree = details.match(/Degree\s+(.+)$/i)?.[1]?.trim();
+      const publishedDetails = [address && `Address ${address}`, degree && `Degree ${degree}`].filter(Boolean).join('; ');
+      results.push({
+        name,
+        registration_number: registrationNumber,
+        status: 'unknown',
+        original_status: publishedDetails || 'Status not published by the official NMC search response',
+        source_url: sourceUrl,
+        disciplinary_actions: ['unavailable'],
+        restrictions: [],
+      });
+    }
+    return results;
   }
 }
