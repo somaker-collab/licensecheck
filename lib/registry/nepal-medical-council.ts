@@ -1,8 +1,19 @@
 import { RegistryAdapter, VerificationRequest } from './registry-adapter';
+import { TinyFishClient } from '../tinyfish/client';
 
 export class NepalMedicalCouncilAdapter extends RegistryAdapter {
   registryName = 'Nepal Medical Council';
   startUrl = 'https://www.nmc.org.np/searchPractitioner';
+
+  async startAsync(req: VerificationRequest) {
+    const searchUrl = new URL(this.startUrl);
+    if (req.name.trim()) searchUrl.searchParams.set('name', req.name.trim());
+    if (req.registration_number?.trim()) {
+      searchUrl.searchParams.set('nmc_no', req.registration_number.trim());
+    }
+
+    return TinyFishClient.startAgent(this.buildAgentPrompt(req), searchUrl.toString());
+  }
 
   buildAgentPrompt(req: VerificationRequest): string {
     const hasRegistrationNumber = Boolean(req.registration_number?.trim());
@@ -10,7 +21,10 @@ export class NepalMedicalCouncilAdapter extends RegistryAdapter {
       .filter(Boolean)
       .join(' or ');
 
-    return `Navigate to the official Nepal Medical Council practitioner register.
+    return `Open the official Nepal Medical Council search results URL first:
+https://www.nmc.org.np/searchPractitioner?name=${encodeURIComponent(req.name.trim())}${req.registration_number?.trim() ? `&nmc_no=${encodeURIComponent(req.registration_number.trim())}` : ''}
+
+The page may contain many results across multiple pages. Read the result list and pagination rather than selecting the first visible row.
 
 Search for:
 "${searchTerms}"
