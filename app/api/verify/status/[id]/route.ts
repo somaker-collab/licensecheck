@@ -86,7 +86,20 @@ export async function GET(
       );
     }
 
-    const run = await TinyFishClient.getRun(job.run_id);
+    const verificationRequest = {
+      name: job.name,
+      registration_number: job.registration_number,
+      jurisdiction: job.jurisdiction,
+      record_type: job.record_type,
+    };
+    const fastFetchJob = job.run_id.startsWith('fast-fetch:');
+    const adapter = getRegistryAdapter(job.jurisdiction, job.record_type);
+    const fastMatches = fastFetchJob
+      ? await adapter.corroborate([], verificationRequest)
+      : null;
+    const run: any = fastFetchJob
+      ? { status: 'COMPLETED', result: { matches: fastMatches || [] }, error: null }
+      : await TinyFishClient.getRun(job.run_id);
 
     if (!['COMPLETED', 'FAILED', 'CANCELLED'].includes(run.status)) {
       return response({
@@ -108,13 +121,9 @@ export async function GET(
       );
     }
 
-    const adapter = getRegistryAdapter(job.jurisdiction, job.record_type);
-    const matches = await adapter.corroborate(run.result?.matches || [], {
-      name: job.name,
-      registration_number: job.registration_number,
-      jurisdiction: job.jurisdiction,
-      record_type: job.record_type,
-    });
+    const matches = fastFetchJob
+      ? (fastMatches || [])
+      : await adapter.corroborate(run.result?.matches || [], verificationRequest);
 
     if (matches.length === 0) {
       const result = {

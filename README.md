@@ -55,7 +55,7 @@ This coverage satisfies the bounty requirement to check at least two official re
 
 ### Agent
 
-TinyFish Agent navigates official registry pages that do not expose convenient APIs. It extracts candidate records and returns structured fields such as name, status, registration number, dates, disciplinary actions, restrictions, and source URL.
+TinyFish Agent navigates official registry pages that do not expose convenient APIs. It extracts candidate records and returns structured fields such as name, status, registration number, dates, disciplinary actions, restrictions, and source URL. UK and New Zealand checks use this dynamic navigation path. Nepal's directly readable NMC search is optimized with a Fetch-first path so name and NMC-number checks do not wait for a redundant Agent browser run.
 
 ### Fetch
 

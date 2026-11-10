@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { connectToDatabase } from '@/lib/mongodb';
 import VerificationJob from '@/models/VerificationJob';
 import { getRegistryAdapter } from '@/lib/services/verification-service';
@@ -12,7 +13,9 @@ export async function POST(req: Request) {
     await connectToDatabase();
     const safeData = validateVerificationRequest(await req.json());
     const adapter = getRegistryAdapter(safeData.jurisdiction, safeData.record_type);
-    const { runId } = await adapter.startAsync(safeData);
+    const runId = safeData.jurisdiction === 'Nepal' && safeData.record_type === 'medical_licence'
+      ? `fast-fetch:${crypto.randomUUID()}`
+      : (await adapter.startAsync(safeData)).runId;
     const job = await VerificationJob.create({
       run_id: runId,
       name: safeData.name,
