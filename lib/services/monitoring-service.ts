@@ -16,9 +16,7 @@ export async function setupMonitor(recordId: string) {
     monitoring_status: 'active',
   });
 
-  if (existingMonitor) {
-    return existingMonitor;
-  }
+  if (existingMonitor) return existingMonitor;
 
   if (!process.env.NEXT_PUBLIC_APP_URL) {
     throw new Error('NEXT_PUBLIC_APP_URL is not configured.');
@@ -36,12 +34,15 @@ export async function setupMonitor(recordId: string) {
   );
   webhookUrl.searchParams.set('token', webhookToken);
 
+  // TinyFish creates a baseline immediately and then checks the official page
+  // once per day at 09:00 UTC. The baseline timestamp is a real first check.
   const tfMonitor = await TinyFishClient.createMonitor(
     record.source_url,
     webhookUrl.toString(),
     'daily',
   );
 
+  const now = new Date();
   return Monitor.create({
     record_id: record._id,
     tinyfish_monitor_id: tfMonitor.id,
@@ -49,6 +50,7 @@ export async function setupMonitor(recordId: string) {
     schedule: 'daily',
     monitoring_status: 'active',
     webhook_token_hash: webhookTokenHash,
+    last_checked_at: tfMonitor.baselineCaptured ? now : undefined,
   });
 }
 
@@ -61,10 +63,7 @@ function dateOrUndefined(value: unknown): Date | undefined {
 async function markProcessed(eventId: string) {
   await WebhookEvent.updateOne(
     { event_id: eventId },
-    {
-      processing_status: 'processed',
-      processed_at: new Date(),
-    },
+    { processing_status: 'processed', processed_at: new Date() },
   );
 }
 
@@ -91,9 +90,10 @@ export async function processWebhook(payload: any, eventId: string) {
 
   const record = await Record.findById(monitor.record_id);
   const pageText = payload.results?.[0]?.text;
+  const checkedAt = new Date();
 
   if (!record || typeof pageText !== 'string' || !pageText.trim()) {
-    monitor.last_checked_at = new Date();
+    monitor.last_checked_at = checkedAt;
     await monitor.save();
     await markProcessed(eventId);
     return;
@@ -105,7 +105,7 @@ export async function processWebhook(payload: any, eventId: string) {
     .digest('hex');
 
   if (monitor.last_content_hash === contentHash) {
-    monitor.last_checked_at = new Date();
+    monitor.last_checked_at = checkedAt;
     await monitor.save();
     await markProcessed(eventId);
     return;
@@ -117,9 +117,8 @@ export async function processWebhook(payload: any, eventId: string) {
   );
 
   const newData = current.data.matches?.[0];
-
   monitor.last_content_hash = contentHash;
-  monitor.last_checked_at = new Date();
+  monitor.last_checked_at = checkedAt;
 
   if (!newData) {
     await monitor.save();
@@ -156,7 +155,7 @@ export async function processWebhook(payload: any, eventId: string) {
     if (newData.disciplinary_actions) record.disciplinary_actions = newData.disciplinary_actions;
     if (newData.restrictions) record.restrictions = newData.restrictions;
 
-    record.checked_at = new Date();
+    record.checked_at = checkedAt;
     await record.save();
   }
 
