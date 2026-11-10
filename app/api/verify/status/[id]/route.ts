@@ -57,6 +57,24 @@ export async function GET(
       : new Date(String(job.createdAt)).getTime();
 
     if (Number.isFinite(createdAt) && Date.now() - createdAt > MAX_JOB_AGE_MS) {
+      if (job.jurisdiction === 'Nepal') {
+        const adapter = getRegistryAdapter(job.jurisdiction, job.record_type);
+        const fallbackMatches = await adapter.corroborate([], {
+          name: job.name,
+          registration_number: job.registration_number,
+          jurisdiction: job.jurisdiction,
+          record_type: job.record_type,
+        });
+        if (fallbackMatches.length === 0 || fallbackMatches.length > 1) {
+          const result = fallbackMatches.length > 1
+            ? { success: true, outcome: 'multiple_matches', matches: fallbackMatches }
+            : { success: true, outcome: 'not_found', matches: [] };
+          job.status = 'completed';
+          job.result = result;
+          await job.save();
+          return response(result);
+        }
+      }
       const error = 'TinyFish verification timed out. Please retry with an exact registration number.';
       job.status = 'failed';
       job.error = error;
@@ -93,6 +111,7 @@ export async function GET(
     const adapter = getRegistryAdapter(job.jurisdiction, job.record_type);
     const matches = await adapter.corroborate(run.result?.matches || [], {
       name: job.name,
+      registration_number: job.registration_number,
       jurisdiction: job.jurisdiction,
       record_type: job.record_type,
     });
