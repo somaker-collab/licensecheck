@@ -95,8 +95,16 @@ export async function GET(
     const fastFetchJob = job.run_id.startsWith('fast-fetch:');
     const adapter = getRegistryAdapter(job.jurisdiction, job.record_type);
     const fastMatches = fastFetchJob
-      ? await adapter.corroborate([], verificationRequest)
+      ? (job.jurisdiction === 'Nepal'
+        ? await adapter.corroborate([], verificationRequest)
+        : await adapter.fastVerify(verificationRequest))
       : null;
+    if (fastFetchJob && fastMatches === null) {
+      const fallbackRun = await adapter.startAsync(verificationRequest);
+      job.run_id = fallbackRun.runId;
+      await job.save();
+      return response({ success: true, outcome: 'pending', status: 'FALLBACK_AGENT' });
+    }
     const run: any = fastFetchJob
       ? { status: 'COMPLETED', result: { matches: fastMatches || [] }, error: null }
       : await TinyFishClient.getRun(job.run_id);

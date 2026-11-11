@@ -1,8 +1,53 @@
-import { RegistryAdapter, VerificationRequest } from './registry-adapter';
+import { RegistryAdapter, RegistryMatch, VerificationRequest } from './registry-adapter';
+import { TinyFishClient } from '../tinyfish/client';
 
 export class NzCompaniesAdapter extends RegistryAdapter {
   registryName = 'New Zealand Companies Register';
   startUrl = 'https://companies-register.companiesoffice.govt.nz/';
+
+  async fastVerify(req: VerificationRequest): Promise<RegistryMatch[] | null> {
+    const companyNumber = req.registration_number?.trim();
+    if (!companyNumber || !/^\d{5,7}$/.test(companyNumber)) return null;
+    const sourceUrl = `https://app.companiesoffice.govt.nz/companies/app/ui/pages/companies/${encodeURIComponent(companyNumber)}`;
+    try {
+      const fetched = await TinyFishClient.fetch(
+        sourceUrl,
+        `Read the official New Zealand Companies Register page for company number ${companyNumber}. Return the complete page text without inference.`,
+      );
+      const text = fetched.results?.[0]?.text?.trim() || '';
+      if (!text || !new RegExp(`\\b${companyNumber}\\b`).test(text)) return null;
+      const name = this.firstLabel(text, ['Company name', 'Legal name', 'Name']) || req.name.trim();
+      const originalStatus = this.firstLabel(text, ['Company status', 'Status']) || 'Status not published by the official Companies Register page';
+      return [{
+        name,
+        registration_number: companyNumber,
+        status: this.mapStatus(originalStatus),
+        original_status: originalStatus,
+        source_url: sourceUrl,
+        disciplinary_actions: [],
+        restrictions: [],
+      }];
+    } catch {
+      return null;
+    }
+  }
+
+  private firstLabel(text: string, labels: string[]): string | undefined {
+    for (const label of labels) {
+      const match = text.match(new RegExp(`${label}\\s*[:|]?\\s*([^\\n|]+)`, 'i'));
+      if (match?.[1]?.trim()) return match[1].trim();
+    }
+    return undefined;
+  }
+
+  private mapStatus(value: string): string {
+    const normalized = value.toLowerCase();
+    if (normalized.includes('remove')) return 'removed';
+    if (normalized.includes('cancel')) return 'cancelled';
+    if (normalized.includes('inactive')) return 'inactive';
+    if (normalized.includes('active') || normalized.includes('registered')) return 'active';
+    return 'unknown';
+  }
 
   buildAgentPrompt(req: VerificationRequest): string {
     const hasRegistrationNumber = Boolean(req.registration_number?.trim());

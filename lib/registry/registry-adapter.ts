@@ -16,6 +16,10 @@ export abstract class RegistryAdapter {
     return TinyFishClient.startAgent(this.buildAgentPrompt(req), this.startUrl);
   }
 
+  async fastVerify(_req: VerificationRequest): Promise<RegistryMatch[] | null> {
+    return null;
+  }
+
   async corroborate(matches: TinyFishMatch[], _req?: VerificationRequest): Promise<RegistryMatch[]> {
     const candidates = (matches || []).filter((match) => Boolean(match.source_url));
     const verified = await Promise.all(candidates.map(async (match) => {

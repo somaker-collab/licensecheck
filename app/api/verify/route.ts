@@ -13,7 +13,11 @@ export async function POST(req: Request) {
     await connectToDatabase();
     const safeData = validateVerificationRequest(await req.json());
     const adapter = getRegistryAdapter(safeData.jurisdiction, safeData.record_type);
-    const runId = safeData.jurisdiction === 'Nepal' && safeData.record_type === 'medical_licence'
+    const directFetchEligible = Boolean(safeData.registration_number)
+      && ((safeData.jurisdiction === 'Nepal' && safeData.record_type === 'medical_licence')
+        || (safeData.jurisdiction === 'United Kingdom' && safeData.record_type === 'medical_licence')
+        || (safeData.jurisdiction === 'New Zealand' && safeData.record_type === 'company_registration'));
+    const runId = directFetchEligible
       ? `fast-fetch:${crypto.randomUUID()}`
       : (await adapter.startAsync(safeData)).runId;
     const job = await VerificationJob.create({
