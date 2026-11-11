@@ -16,8 +16,11 @@ export class UkGmcAdapter extends RegistryAdapter {
       );
       const text = fetched.results?.[0]?.text?.trim() || '';
       if (!text || !new RegExp(`\\b${reference}\\b`).test(text)) return null;
-      const name = this.firstLabel(text, ['Name', 'Registrant name', 'Full name']) || req.name.trim();
-      const originalStatus = this.firstLabel(text, ['Registration status', 'Licence status', 'Status']) || 'Status not published by the official GMC page';
+      const name = this.firstHeading(text);
+      if (!name) return null;
+      const originalStatus = /not currently registered|not on the medical register|may not practise/i.test(text)
+        ? 'Not currently registered; not on the Medical Register'
+        : this.firstLabel(text, ['Registration status', 'Licence status', 'Status']) || 'Status not published by the official GMC page';
       return [{
         name,
         registration_number: reference,
@@ -40,12 +43,17 @@ export class UkGmcAdapter extends RegistryAdapter {
     return undefined;
   }
 
+  private firstHeading(text: string): string | undefined {
+    return text.split(/\r?\n/).map((line) => line.replace(/^#+\s*/, '').trim()).find((line) => line.length > 2);
+  }
+
   private mapStatus(value: string): string {
     const normalized = value.toLowerCase();
     if (normalized.includes('suspend')) return 'suspended';
     if (normalized.includes('cancel')) return 'cancelled';
     if (normalized.includes('remove')) return 'removed';
     if (normalized.includes('expire')) return 'expired';
+    if (normalized.includes('not currently') || normalized.includes('not on the medical register')) return 'inactive';
     if (normalized.includes('active') || normalized.includes('practise')) return 'active';
     return 'unknown';
   }
