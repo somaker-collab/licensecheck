@@ -43,7 +43,8 @@ export class NzCompaniesAdapter extends RegistryAdapter {
   }
 
   private firstHeading(text: string): string | undefined {
-    return text.split(/\r?\n/).map((line) => line.replace(/^#+\s*/, '').trim()).find((line) => line.length > 2);
+    const lines = text.split(/\r?\n/).map((line) => line.replace(/^#+\s*/, '').trim()).filter((line) => line.length > 2);
+    return lines.find((line) => /\(\d{5,7}\)/.test(line)) || lines.find((line) => /Registered|Removed|Deregistered|In liquidation/i.test(line));
   }
 
   private mapStatus(value: string): string {
