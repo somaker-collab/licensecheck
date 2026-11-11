@@ -18,7 +18,7 @@ export class NzCompaniesAdapter extends RegistryAdapter {
       if (!text || !new RegExp(`\\b${companyNumber}\\b`).test(text)) return null;
       const heading = this.firstHeading(text);
       if (!heading) return null;
-      const name = heading.replace(new RegExp(`\\s*\\(${companyNumber}\\)\\s*`, 'i'), '').replace(/\s+(Registered|Removed|In liquidation|Deregistered)\s*$/i, '').trim();
+      const name = heading.replace(new RegExp(`\\s*\\(${companyNumber}\\)\\s*`, 'i'), '').replace(/\s*(Registered|Removed|In liquidation|Deregistered)\s*$/i, '').trim();
       const originalStatus = this.firstLabel(text, ['Company status', 'Status']) || (/(Registered|Removed|In liquidation|Deregistered)/i.exec(heading)?.[1] || 'Status not published by the official Companies Register page');
       return [{
         name,
