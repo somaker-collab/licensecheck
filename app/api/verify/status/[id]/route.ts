@@ -95,9 +95,7 @@ export async function GET(
     const fastFetchJob = job.run_id.startsWith('fast-fetch:');
     const adapter = getRegistryAdapter(job.jurisdiction, job.record_type);
     const fastMatches = fastFetchJob
-      ? (job.jurisdiction === 'Nepal'
-        ? await adapter.corroborate([], verificationRequest)
-        : await adapter.fastVerify(verificationRequest))
+      ? await adapter.fastVerify(verificationRequest)
       : null;
     if (fastFetchJob && fastMatches === null) {
       const fallbackRun = await adapter.startAsync(verificationRequest);

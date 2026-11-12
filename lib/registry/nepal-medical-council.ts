@@ -62,6 +62,27 @@ Important rules:
 - Registration number supplied: ${hasRegistrationNumber ? 'yes' : 'no'}.`;
   }
 
+  async fastVerify(req: VerificationRequest): Promise<RegistryMatch[] | null> {
+    const searchUrl = new URL(this.startUrl);
+    if (req.name.trim()) searchUrl.searchParams.set('name', req.name.trim());
+    if (req.registration_number?.trim()) searchUrl.searchParams.set('nmc_no', req.registration_number.trim());
+
+    try {
+      const fetched = await TinyFishClient.fetch(
+        searchUrl.toString(),
+        `Extract every practitioner row returned by the official Nepal Medical Council search for ${req.name}${req.registration_number ? ` and NMC number ${req.registration_number}` : ''}. Preserve the published name, NMC number, address, gender, and degree. Do not infer status or any unpublished field.`,
+      );
+      const text = fetched.results?.[0]?.text || '';
+      const parsed = this.parseOfficialRows(text, searchUrl.toString());
+      if (parsed.length > 0 || text.includes('Please enter Doctor Name or NMC number') || /no result|no record found/i.test(text)) {
+        return parsed.filter((match) => !req.registration_number || match.registration_number === req.registration_number.trim());
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
   async corroborate(matches: TinyFishMatch[], req?: VerificationRequest): Promise<RegistryMatch[]> {
     if (req) {
       const searchUrl = new URL(this.startUrl);
