@@ -62,10 +62,12 @@ export class NzCompaniesAdapter extends RegistryAdapter {
     const lines = normalizedText.split(/\r?\n/)
       .map((line) => line.replace(/^[-*#>\s]+/, '').trim()).filter(Boolean);
     for (const line of lines) {
-      const match = line.match(/(?:^|\b(?:result|results|company)\s*[:\-]?\s*)([A-Za-z0-9][A-Za-z0-9 &.'’(),/-]{2,120}?)\s*\((\d{5,7})\)(?:\s*\(NZBN:\s*\d+\))?\s+(Registered|Removed|In liquidation|In receivership|In voluntary administration|In statutory management|Approved)\b/i);
+      const match = line.match(/(?:^|\b(?:result|results|company)\s*[:\-]?\s*)([A-Za-z0-9][A-Za-z0-9 &.'’(),/-]{2,120}?)\s*\((\d{5,7})\)(?:\s*\(NZBN:\s*\d+\))?/i);
       if (!match || seen.has(match[2])) continue;
       seen.add(match[2]);
-      results.push(this.toMatch(match[1], match[2], match[3], `https://app.companiesoffice.govt.nz/companies/app/ui/pages/companies/${encodeURIComponent(match[2])}`));
+      const status = line.slice((match.index || 0) + match[0].length).match(/\b(Registered|Removed|In liquidation|In receivership|In voluntary administration|In statutory management|Approved)\b/i)?.[1]
+        || 'Status not published by the official Companies Register search result';
+      results.push(this.toMatch(match[1], match[2], status, `https://app.companiesoffice.govt.nz/companies/app/ui/pages/companies/${encodeURIComponent(match[2])}`));
     }
     return results;
   }
