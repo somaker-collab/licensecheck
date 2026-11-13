@@ -32,11 +32,42 @@ export class NzCompaniesAdapter extends RegistryAdapter {
       if (/sorry,? we cannot search for companies|search (?:is )?unavailable|try searching the register directly/i.test(text)) return null;
       const results = this.parseSearchResults(text);
       if (results.length > 0) return results;
+      if (!companyNumber) {
+        const officialResults = await this.fetchOfficialSearchResults(sourceUrl);
+        if (officialResults.length > 0) return officialResults;
+      }
       if (/no (?:companies|records) (?:were )?found|couldn't find a company matching|no records matched/i.test(text)) return [];
       return null;
     } catch {
       return null;
     }
+  }
+
+  private async fetchOfficialSearchResults(sourceUrl: string): Promise<RegistryMatch[]> {
+    try {
+      const response = await fetch(sourceUrl, { cache: 'no-store' });
+      if (!response.ok) return [];
+      const html = await response.text();
+      const results: RegistryMatch[] = [];
+      const seen = new Set<string>();
+      const entryPattern = /<span[^>]*class=["']entityName["'][^>]*>\s*([^<]+?)\s*<\/span>\s*<span[^>]*class=["']entityInfo["'][^>]*>\s*\((\d{5,7})\)([\s\S]*?)<\/span>/gi;
+      for (const match of Array.from(html.matchAll(entryPattern))) {
+        const name = this.cleanMarkup(match[1]);
+        const registrationNumber = match[2];
+        if (!name || seen.has(registrationNumber)) continue;
+        const status = this.cleanMarkup(match[3]).match(/\b(Registered|Removed|In liquidation|In receivership|In voluntary administration|In statutory management|Approved)\b/i)?.[1]
+          || 'Status not published by the official Companies Register search result';
+        seen.add(registrationNumber);
+        results.push(this.toMatch(name, registrationNumber, status, `https://app.companiesoffice.govt.nz/companies/app/ui/pages/companies/${encodeURIComponent(registrationNumber)}`));
+      }
+      return results;
+    } catch {
+      return [];
+    }
+  }
+
+  private cleanMarkup(value: string): string {
+    return value.replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/&#39;|&apos;/g, "'").replace(/&quot;/g, '"').replace(/\s+/g, ' ').trim();
   }
 
   private toMatch(name: string, registrationNumber: string, originalStatus: string, sourceUrl: string): RegistryMatch {
