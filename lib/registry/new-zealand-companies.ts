@@ -29,7 +29,6 @@ export class NzCompaniesAdapter extends RegistryAdapter {
         return [this.toMatch(name, companyNumber, originalStatus, sourceUrl)];
       }
 
-      if (/sorry,? we cannot search for companies|search (?:is )?unavailable|try searching the register directly/i.test(text)) return null;
       const results = this.parseSearchResults(text);
       if (results.length > 0) return results;
       if (!companyNumber) {
