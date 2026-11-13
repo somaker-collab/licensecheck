@@ -15,8 +15,8 @@ export async function POST(req: Request) {
     const adapter = getRegistryAdapter(safeData.jurisdiction, safeData.record_type);
     const directFetchEligible = (safeData.jurisdiction === 'Nepal' && safeData.record_type === 'medical_licence')
       || (Boolean(safeData.registration_number)
-        && ((safeData.jurisdiction === 'United Kingdom' && safeData.record_type === 'medical_licence')
-          || (safeData.jurisdiction === 'New Zealand' && safeData.record_type === 'company_registration')));
+        && (safeData.jurisdiction === 'United Kingdom' && safeData.record_type === 'medical_licence'))
+      || (safeData.jurisdiction === 'New Zealand' && safeData.record_type === 'company_registration');
     const runId = directFetchEligible
       ? `fast-fetch:${crypto.randomUUID()}`
       : (await adapter.startAsync(safeData)).runId;

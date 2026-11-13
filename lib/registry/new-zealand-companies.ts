@@ -7,31 +7,61 @@ export class NzCompaniesAdapter extends RegistryAdapter {
 
   async fastVerify(req: VerificationRequest): Promise<RegistryMatch[] | null> {
     const companyNumber = req.registration_number?.trim();
-    if (!companyNumber || !/^\d{5,7}$/.test(companyNumber)) return null;
-    const sourceUrl = `https://app.companiesoffice.govt.nz/companies/app/ui/pages/companies/${encodeURIComponent(companyNumber)}`;
+    if (!companyNumber && !req.name.trim()) return null;
+    const sourceUrl = companyNumber && /^\d{5,7}$/.test(companyNumber)
+      ? `https://app.companiesoffice.govt.nz/companies/app/ui/pages/companies/${encodeURIComponent(companyNumber)}`
+      : `https://app.companiesoffice.govt.nz/companies/app/ui/pages/companies/search?mode=standard&type=entities&q=${encodeURIComponent(req.name.trim())}&advancedPanel=true&entityTypes=ALL`;
     try {
       const fetched = await TinyFishClient.fetch(
         sourceUrl,
-        `Read the official New Zealand Companies Register page for company number ${companyNumber}. Return the complete page text without inference.`,
+        companyNumber
+          ? `Read the official New Zealand Companies Register page for company number ${companyNumber}. Return the complete page text without inference.`
+          : `Read the official New Zealand Companies Register search results for the exact company name "${req.name}". Return every result exactly as shown, including company number and status. Do not infer or invent results.`,
       );
       const text = fetched.results?.[0]?.text?.trim() || '';
-      if (!text || !new RegExp(`\\b${companyNumber}\\b`).test(text)) return null;
-      const heading = this.firstHeading(text);
-      if (!heading) return null;
-      const name = heading.replace(new RegExp(`\\s*\\(${companyNumber}\\)\\s*`, 'i'), '').replace(/\s*(Registered|Removed|In liquidation|Deregistered)\s*$/i, '').trim();
-      const originalStatus = this.firstLabel(text, ['Company status', 'Status']) || (/(Registered|Removed|In liquidation|Deregistered)/i.exec(heading)?.[1] || 'Status not published by the official Companies Register page');
-      return [{
-        name,
-        registration_number: companyNumber,
-        status: this.mapStatus(originalStatus),
-        original_status: originalStatus,
-        source_url: sourceUrl,
-        disciplinary_actions: [],
-        restrictions: [],
-      }];
+      if (!text) return null;
+      if (companyNumber) {
+        if (!new RegExp(`\\b${companyNumber}\\b`).test(text)) return null;
+        const heading = this.firstHeading(text);
+        if (!heading) return null;
+        const name = heading.replace(new RegExp(`\\s*\\(${companyNumber}\\)\\s*`, 'i'), '').replace(/\s*(Registered|Removed|In liquidation|Deregistered)\s*$/i, '').trim();
+        const originalStatus = this.firstLabel(text, ['Company status', 'Status']) || (/(Registered|Removed|In liquidation|Deregistered)/i.exec(heading)?.[1] || 'Status not published by the official Companies Register page');
+        return [this.toMatch(name, companyNumber, originalStatus, sourceUrl)];
+      }
+
+      if (/sorry,? we cannot search for companies|search (?:is )?unavailable|try searching the register directly/i.test(text)) return null;
+      const results = this.parseSearchResults(text);
+      if (results.length > 0) return results;
+      if (/no (?:companies|records) (?:were )?found|couldn't find a company matching|no records matched/i.test(text)) return [];
+      return null;
     } catch {
       return null;
     }
+  }
+
+  private toMatch(name: string, registrationNumber: string, originalStatus: string, sourceUrl: string): RegistryMatch {
+    return {
+      name: name.trim(),
+      registration_number: registrationNumber,
+      status: this.mapStatus(originalStatus),
+      original_status: originalStatus.trim(),
+      source_url: sourceUrl,
+      disciplinary_actions: [],
+      restrictions: [],
+    };
+  }
+
+  private parseSearchResults(text: string): RegistryMatch[] {
+    const results: RegistryMatch[] = [];
+    const seen = new Set<string>();
+    const lines = text.split(/\r?\n/).map((line) => line.replace(/^[-*#>\s]+/, '').replace(/\s+/g, ' ').trim()).filter(Boolean);
+    for (const line of lines) {
+      const match = line.match(/^(.+?)\s*\((\d{5,7})\)(?:\s*\(NZBN:\s*\d+\))?\s+(Registered|Removed|In liquidation|In receivership|In voluntary administration|In statutory management|Approved)\b/i);
+      if (!match || seen.has(match[2])) continue;
+      seen.add(match[2]);
+      results.push(this.toMatch(match[1], match[2], match[3], `https://app.companiesoffice.govt.nz/companies/app/ui/pages/companies/${encodeURIComponent(match[2])}`));
+    }
+    return results;
   }
 
   private firstLabel(text: string, labels: string[]): string | undefined {
