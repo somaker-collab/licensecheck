@@ -5,6 +5,14 @@ export class NzCompaniesAdapter extends RegistryAdapter {
   registryName = 'New Zealand Companies Register';
   startUrl = 'https://companies-register.companiesoffice.govt.nz/';
 
+  async startAsync(req: VerificationRequest) {
+    const companyNumber = req.registration_number?.trim();
+    const startUrl = companyNumber && /^\d{5,7}$/.test(companyNumber)
+      ? `https://app.companiesoffice.govt.nz/companies/app/ui/pages/companies/${encodeURIComponent(companyNumber)}`
+      : `https://app.companiesoffice.govt.nz/companies/app/ui/pages/companies/search?mode=standard&type=entities&q=${encodeURIComponent(req.name.trim())}&advancedPanel=true&entityTypes=ALL`;
+    return TinyFishClient.startAgent(this.buildAgentPrompt(req), startUrl);
+  }
+
   async fastVerify(req: VerificationRequest): Promise<RegistryMatch[] | null> {
     const companyNumber = req.registration_number?.trim();
     if (!companyNumber && !req.name.trim()) return null;
