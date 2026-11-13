@@ -38,10 +38,10 @@ export class NzCompaniesAdapter extends RegistryAdapter {
       }
 
       const results = this.parseSearchResults(text);
-      if (results.length > 0) return results;
+      if (results.length > 0) return this.preferExactName(results, req.name);
       if (!companyNumber) {
         const officialResults = await this.fetchOfficialSearchResults(sourceUrl);
-        if (officialResults.length > 0) return officialResults;
+        if (officialResults.length > 0) return this.preferExactName(officialResults, req.name);
       }
       if (/no (?:companies|records) (?:were )?found|couldn't find a company matching|no records matched/i.test(text)) return [];
       return null;
@@ -87,6 +87,12 @@ export class NzCompaniesAdapter extends RegistryAdapter {
       disciplinary_actions: [],
       restrictions: [],
     };
+  }
+
+  private preferExactName(results: RegistryMatch[], requestedName: string): RegistryMatch[] {
+    const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const exact = results.filter((result) => normalize(result.name) === normalize(requestedName));
+    return exact.length > 0 ? exact : results;
   }
 
   private parseSearchResults(text: string): RegistryMatch[] {
