@@ -61,6 +61,19 @@ TinyFish Agent navigates official registry pages that do not expose convenient A
 
 TinyFish Fetch retrieves the official result page for corroboration. The Nepal adapter also parses the official NMC Markdown table deterministically, which preserves all candidates for ambiguous names such as `Manoj Kumar Sah`.
 
+### Expected verification time
+
+Verification time depends on the official registry and the TinyFish path used. These are observed production timings, not a guaranteed SLA:
+
+| Verification path | Typical observed time | Why |
+|---|---:|---|
+| Nepal name or NMC-number search | **about 3–8 seconds** | Direct TinyFish Fetch plus deterministic parsing of the official NMC response. |
+| Exact UK GMC reference or NZ company number | **about 4–15 seconds** | Direct Fetch of the official record page followed by conservative parsing. |
+| Broad UK or NZ name search | **about 30–90 seconds** | TinyFish Agent must navigate the dynamic registry, search results, and possible candidates. |
+| Fetch uncertainty fallback | **can take longer** | The app starts TinyFish Agent rather than returning an unsafe or guessed result. |
+
+The browser polls the status endpoint every 1.5 seconds while a job is pending. A slower result is intentional when Agent must inspect a dynamic official site; accuracy and complete ambiguity handling take priority over returning a fast but unverified answer. The interface shows a pending state rather than guessing, and the server applies a bounded timeout so a job cannot remain `RUNNING` forever.
+
 ### Monitor
 
 When a verified record is watched, the application creates a **daily** TinyFish Monitor. TinyFish captures an initial baseline and checks the official page once per day at approximately 09:00 UTC. The application records the baseline/last-checked time and generates a per-monitor webhook token. Only the SHA-256 hash of that token is stored in MongoDB.
